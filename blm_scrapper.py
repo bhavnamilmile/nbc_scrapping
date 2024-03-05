@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 from datetime import datetime
+import re
 import csv
 import os
 
@@ -102,8 +103,60 @@ class WSJScraper(BLMContentScraper):
 
 
 
-
 class NBCScraper(BLMContentScraper):
+    def __init__(self, id, html_content):
+        super().__init__(html_content)
+        self.headline_selector = 'h1.article-hero-headline__htag'
+        self.author_selector = 'p.endmark'
+        self.date_selector = 'time.relative'
+        self.url_selector = 'a'
+        self.date_format = '%B %d, %Y %I:%M %p ET'
+        self.output_date_format = '%m-%d-%Y'
+        self.article_selector = 'article.WSJTheme--story--XB4V2mLz'
+        self.description_selector = 'div.styles_articleDek__Icz5H'
+
+        self.body = 'div.article-body__content'
+
+        self.id = id
+        self.source = "NBCNews"  # Make sure to set it correctly and use proper folder name convention
+        # Check if all elements are filled
+        if not self.check_selectors_filled():
+            raise ValueError("One or more selectors or formats are not set.")
+
+    def fetch_article_body(self, article):
+
+        article_paras = article.select(self.body)
+
+
+        paragraph_selector = "p"
+
+        paragraphs = article_paras[0].select(paragraph_selector)
+
+        body_str = ""
+        for para in paragraphs:
+            body_str += para.text +"\n"
+        return body_str
+
+    def fetch_single_article(self, article, url):
+        data = super().fetch_single_article(article)
+        date_str = article.select_one(self.date_selector).attrs['datetime'] if article.select_one(self.date_selector) else 'DATE_NOT_FOUND'
+        print(data)
+        clean_headline= re.sub(r'[^a-zA-Z0-9\s]', '', data[3])
+        try:
+            # Parse the datetime string
+            date_time_obj = datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%S.%fZ')
+
+            date_str = date_time_obj.strftime(self.output_date_format)
+        except ValueError:
+            date_str = 'INVALID_DATE_FORMAT'
+
+        data[1] = date_str
+        data[-1] = url
+        data[3]= clean_headline
+        return data
+    
+
+class CBSScraper(BLMContentScraper):
     def __init__(self, id, html_content):
         super().__init__(html_content)
         self.headline_selector = 'h1.article-hero-headline__htag'
@@ -152,6 +205,9 @@ class NBCScraper(BLMContentScraper):
         data[1] = date_str
         data[-1] = url
         return data
+
+
+
 def scrape_and_save(id, file_name, csv_out):
     with open(file_name) as f:
         html_content = f.read()
